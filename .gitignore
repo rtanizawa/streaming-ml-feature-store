@@ -1,0 +1,65 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+*.egg
+pip-log.txt
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Gradle / Kotlin / Java
+pipeline/.gradle/
+pipeline/build/
+pipeline/local.properties
+*.class
+*.jar
+*.war
+*.ear
+!gradle/wrapper/gradle-wrapper.jar
+
+# Flink
+flink-checkpoints/
+flink-savepoints/
+
+# ML models & data
+serving/models/*.pkl
+serving/models/*.joblib
+serving/models/*.h5
+serving/models/*.pt
+serving/models/*.onnx
+*.model
+*.bin
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+logs/
+
+# Docker volumes (local bind mounts if added later)
+redis-data/
+kafka-data/
