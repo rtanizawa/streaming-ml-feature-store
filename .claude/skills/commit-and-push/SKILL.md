@@ -1,5 +1,5 @@
 ---
-name: commit-and-push
+name: git:commit-and-push
 description: Commit pending changes and push to remote branch
 allowed-tools: 
   - Bash(git status:*)
