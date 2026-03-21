@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker-compose:*)",
+      "Bash(find:*)",
+      "Bash(git checkout:*)",
+      "Bash(git tag:*)",
+      "Bash(git rm:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git mv:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(tree:*)",
+      "Bash(xargs ls:*)"
+    ]
+  },
+  "permissionMode": "prompt",
+  "allowedPrompts": [
+    {
+      "tool": "Task",
+      "prompt": "tester"
+    }
+  ],
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx eslint \"${file_path}\" --fix || true",
+            "statusMessage": "Running eslint..."
+          }
+        ]
+      }
+    ]
+  }
+}
