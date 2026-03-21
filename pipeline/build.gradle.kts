@@ -43,5 +43,5 @@ application {
 tasks.register<JavaExec>("runProducer") {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.rtagui.producer.BraSerieAProducerKt")
-    args = listOf("/Users/rafaeltanizawa/Downloads/BRA.csv")
+    args = listOf("${rootProject.projectDir}/../notebooks/bra_serie_a/BRA.csv")
 }

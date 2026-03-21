@@ -7,7 +7,9 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.StringSerializer
 import org.slf4j.LoggerFactory
-import java.io.FileReader
+import java.io.BufferedReader
+import java.io.FileInputStream
+import java.io.InputStreamReader
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -15,6 +17,13 @@ import java.util.Properties
 import java.util.UUID
 
 private val logger = LoggerFactory.getLogger("com.rtagui.producer.BraSerieAProducer")
+
+private fun bomStrippedReader(path: String): BufferedReader {
+    val reader = BufferedReader(InputStreamReader(FileInputStream(path), Charsets.UTF_8))
+    reader.mark(1)
+    if (reader.read() != '\uFEFF'.code) reader.reset()
+    return reader
+}
 
 fun main(args: Array<String>) {
     val csvPath = args.getOrElse(0) { "BRA.csv" }
@@ -36,7 +45,7 @@ fun main(args: Array<String>) {
         .setHeader()
         .setSkipHeaderRecord(true)
         .build()
-        .parse(FileReader(csvPath))
+        .parse(bomStrippedReader(csvPath))
         .records
 
     val grouped: Map<LocalDate, List<org.apache.commons.csv.CSVRecord>> = records
@@ -62,15 +71,15 @@ fun main(args: Array<String>) {
                     homeGoals = csv.get("HG").trim().toIntOrNull(),
                     awayGoals = csv.get("AG").trim().toIntOrNull(),
                     result = csv.get("Res").trim().takeIf { it.isNotEmpty() },
-                    oddsPinnacleHome = csv.get("PH").trim().toDoubleOrNull(),
-                    oddsPinnacleDraw = csv.get("PD").trim().toDoubleOrNull(),
-                    oddsPinnacleAway = csv.get("PA").trim().toDoubleOrNull(),
-                    oddsMaxHome = csv.get("MaxH").trim().toDoubleOrNull(),
-                    oddsMaxDraw = csv.get("MaxD").trim().toDoubleOrNull(),
-                    oddsMaxAway = csv.get("MaxA").trim().toDoubleOrNull(),
-                    oddsAvgHome = csv.get("AvgH").trim().toDoubleOrNull(),
-                    oddsAvgDraw = csv.get("AvgD").trim().toDoubleOrNull(),
-                    oddsAvgAway = csv.get("AvgA").trim().toDoubleOrNull(),
+                    oddsPinnacleHome = csv.get("PSCH").trim().toDoubleOrNull(),
+                    oddsPinnacleDraw = csv.get("PSCD").trim().toDoubleOrNull(),
+                    oddsPinnacleAway = csv.get("PSCA").trim().toDoubleOrNull(),
+                    oddsMaxHome = csv.get("MaxCH").trim().toDoubleOrNull(),
+                    oddsMaxDraw = csv.get("MaxCD").trim().toDoubleOrNull(),
+                    oddsMaxAway = csv.get("MaxCA").trim().toDoubleOrNull(),
+                    oddsAvgHome = csv.get("AvgCH").trim().toDoubleOrNull(),
+                    oddsAvgDraw = csv.get("AvgCD").trim().toDoubleOrNull(),
+                    oddsAvgAway = csv.get("AvgCA").trim().toDoubleOrNull(),
                 )
                 val json = mapper.writeValueAsString(event)
                 producer.send(ProducerRecord(topic, event.homeTeam, json))
