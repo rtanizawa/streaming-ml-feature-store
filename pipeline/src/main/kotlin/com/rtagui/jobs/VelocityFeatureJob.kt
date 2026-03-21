@@ -1,7 +1,7 @@
-package com.yourorg.jobs
+package com.rtagui.jobs
 
-import com.yourorg.sink.RedisSink
-import com.yourorg.transforms.VelocityAggregator
+//import com.rtagui.sink.RedisSink
+//import com.rtagui.transforms.VelocityAggregator
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
 
 class VelocityFeatureJob {

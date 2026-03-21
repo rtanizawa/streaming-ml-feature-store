@@ -1,4 +1,4 @@
-package com.yourorg.transforms
+package com.rtagui.transforms
 
 // TODO: define input event and output feature types
 // class VelocityAggregator : AggregateFunction<InputEvent, Accumulator, VelocityFeatures> {

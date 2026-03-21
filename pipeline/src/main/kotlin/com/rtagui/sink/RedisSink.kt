@@ -1,4 +1,4 @@
-package com.yourorg.sink
+package com.rtagui.sink
 
 import io.lettuce.core.RedisClient
 import io.lettuce.core.api.StatefulRedisConnection
