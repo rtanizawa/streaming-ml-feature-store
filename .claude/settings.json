@@ -19,13 +19,16 @@
       "mcp__plugin_context7_context7__query-docs"
     ]
   },
+  "hooks": {},
+  "enabledPlugins": {
+    "github@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true
+  },
   "permissionMode": "prompt",
   "allowedPrompts": [
     {
       "tool": "Task",
       "prompt": "tester"
     }
-  ],
-  "hooks": {
-  }
+  ]
 }
