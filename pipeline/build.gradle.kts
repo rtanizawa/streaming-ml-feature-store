@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.1.10"
     application
+    id("com.gradleup.shadow") version "8.3.6"
 }
 
 kotlin {
@@ -34,10 +35,20 @@ dependencies {
 
     // Logging
     implementation("org.slf4j:slf4j-simple:2.0.12")
+
+    // Testing
+    testImplementation(kotlin("test"))
+    testImplementation("org.apache.flink:flink-test-utils:$flinkVersion")
+    testImplementation("org.testcontainers:testcontainers:1.19.8")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.8")
 }
 
 application {
     mainClass.set("com.rtagui.MainKt")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.register<JavaExec>("runProducer") {
