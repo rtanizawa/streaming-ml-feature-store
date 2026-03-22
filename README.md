@@ -41,68 +41,81 @@ team_stats:palmeiras  →  { matchesPlayed, wins, draws, losses, goalsFor, goals
 ## Target State
 
 A full production ML lifecycle requires two distinct pipelines: **offline** for model
-training and **online** for real-time inference. Both must compute features identically
-to avoid training/serving skew.
+training and **online** for real-time inference. Feast acts as the feature store layer,
+keeping both stores in sync through a single sink — eliminating training/serving skew.
 
 ```
-                   ┌─────────────────────────────────────────────┐
-                   │                OFFLINE PIPELINE              │
-                   │                                             │
-  Data Lake  ──────►  Flink Batch  ──►  Feature Export  ──►  Model Training
-  (CSV/S3)   │    │  (same transforms)       │              (XGBoost)
-             │    │                          │                    │
-             │    └──────────────────────────┼────────────────────┼──┘
-             │                               │                    │
-             │                         Training Dataset    Model Registry
-             │                                                    │
-             │    ┌───────────────────────────────────────────────┼──┐
-             │    │                ONLINE PIPELINE                │  │
-             │    │                                               ▼  │
-             └────►  Kafka  ──►  Flink Stream  ──►  Redis  ──►  Serve
-                  │  (live        (same              (feature    (API)
-                  │  events)      transforms)         store)      │
-                  │                                               │
-                  │              Monitoring / Drift Detection ◄───┘
-                  │                        │
-                  └────────── Retrain Trigger ──► Offline Pipeline
-                  └────────────────────────────────────────────────┘
+                        OFFLINE PIPELINE (one-time backfill)
+                        ─────────────────────────────────────────────────
+  BRA.csv ──► Flink Batch ──► pre-computed features (Parquet)
+              (aggregations)          │
+                                      ▼
+                                feast materialize ──► Parquet/S3 (offline store)
+                                                 └──► Redis (online store)
+
+
+                        ONLINE PIPELINE (continuous)
+                        ─────────────────────────────────────────────────
+  Kafka ──► Flink Stream ──► Feast push ──► Parquet/S3 (offline store)
+            (aggregations)            └──► Redis (online store)
+
+
+                        TRAINING (scheduled or drift-triggered)
+                        ─────────────────────────────────────────────────
+  feast get_historical_features() ──► XGBoost training ──► Model Registry
+
+
+                        SERVING
+                        ─────────────────────────────────────────────────
+  Match event ──► API ──► Redis (online store) ──► XGBoost ──► Prediction
+                                                         │
+                                        Monitoring / Drift Detection
+                                                         │
+                                              Retrain Trigger
 ```
 
 ### Offline Pipeline
 
-Processes **bounded, historical data** (CSV, data lake) to:
+Runs **once** as a **Flink Batch job** (`RuntimeExecutionMode.BATCH`) to backfill
+aggregated features from historical data (BRA.csv) into Parquet format. Feast then
+materializes these pre-computed features into both the offline (Parquet/S3) and online
+(Redis) stores via `feast materialize`.
 
-- Compute features over the full match history
-- Export a training dataset with consistent feature definitions
-- Train and register a new model version
-
-Runs as a **Flink Batch job** (`RuntimeExecutionMode.BATCH`) using the same transform
-code as the streaming pipeline, guaranteeing feature consistency.
-
-**Triggers:**
-- Scheduled (e.g. weekly retrain)
-- On-demand when model performance degrades or data drift is detected
+This step is only needed when:
+- Setting up the system for the first time
+- Adding a new feature that requires historical recomputation
 
 ### Online Pipeline
 
-Processes **unbounded, live event data** (Kafka) to:
+Runs **continuously** as a **Flink Streaming job** (what we have today). As new match
+events arrive via Kafka, Flink computes the same aggregations and pushes to Feast, which
+writes to **both stores simultaneously**:
 
-- Compute features incrementally as match events arrive
-- Write updated features to Redis in real time
-- Serve features to the inference API at prediction time
+```kotlin
+// RedisSink replaced by a single Feast push
+store.push("match_stats_push_source", features, to = PushMode.ONLINE_AND_OFFLINE)
+```
 
-Runs as a **Flink Streaming job** (what we have today) with checkpointing enabled so
-it resumes correctly after restarts without reprocessing old events.
+Feast's feature server (`feast serve`) exposes an HTTP endpoint that Flink calls,
+replacing the direct Redis sink. This is the only sink needed — Feast handles the rest.
 
-### Feature Store (Redis)
+### Feature Store (Feast)
 
-Sits at the intersection of both pipelines — the single source of features for inference.
+Feast manages two backing stores:
 
-- **Offline** writes the historical baseline at retrain time
-- **Online** overwrites with live updates as new events arrive
-- **Serving layer** reads from Redis at prediction time
+| Store | Technology | Purpose |
+|-------|------------|---------|
+| Online store | Redis | Low-latency feature serving at inference time |
+| Offline store | Parquet / S3 | Historical features for model training |
 
-Using the same feature store for training and serving eliminates training/serving skew.
+Both stores are always in sync — written together on every Flink push.
+
+### Retraining
+
+Triggered on a schedule or when model drift is detected. Uses
+`feast get_historical_features()` to read point-in-time correct features from the
+offline store, guaranteeing the training dataset reflects what the model would have
+seen at prediction time (no data leakage).
 
 ### Model Registry
 
