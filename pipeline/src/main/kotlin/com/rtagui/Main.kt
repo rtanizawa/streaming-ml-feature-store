@@ -1,7 +1,12 @@
 package com.rtagui
 
+import com.rtagui.config.AppConfigLoader
 import com.rtagui.jobs.VelocityFeatureJob
 
 fun main() {
-    VelocityFeatureJob().run()
+    val config = AppConfigLoader.load()
+    VelocityFeatureJob(
+        bootstrapServers = config.kafka.bootstrapServers,
+        redisUri = config.redis.uri,
+    ).run()
 }

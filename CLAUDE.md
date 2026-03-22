@@ -18,3 +18,4 @@
 
 - ❌ Add unnecessary functionality, if it's not solving the current use case (YAGNI).
 - ❌ Do not add comments for future features or fields if not needed to solve an existing problem (YAGNI)
+- ❌ Do commit code without explicit authorization

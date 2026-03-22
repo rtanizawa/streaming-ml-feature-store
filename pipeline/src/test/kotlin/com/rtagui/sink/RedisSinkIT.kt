@@ -1,50 +1,40 @@
 package com.rtagui.sink
 
 import com.rtagui.model.TeamStats
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.shouldBe
 import io.lettuce.core.RedisClient
 import org.apache.flink.api.common.functions.OpenContext
-import org.apache.flink.configuration.Configuration
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import org.testcontainers.containers.GenericContainer
-import org.testcontainers.junit.jupiter.Container
-import org.testcontainers.junit.jupiter.Testcontainers
-import kotlin.test.assertEquals
 
-@Testcontainers
-class RedisSinkIT {
+class RedisSinkIT : FunSpec({
 
-    companion object {
-        @Container
-        @JvmStatic
-        val redis = GenericContainer<Nothing>("redis:7-alpine").apply {
-            withExposedPorts(6379)
-        }
+    val redis = GenericContainer<Nothing>("redis:7-alpine").apply {
+        withExposedPorts(6379)
     }
 
-    private lateinit var sink: RedisSink
+    beforeSpec { redis.start() }
+    afterSpec { redis.stop() }
 
-    @BeforeEach
-    fun setUp() {
+    lateinit var sink: RedisSink
+
+    beforeTest {
         val uri = "redis://${redis.host}:${redis.getMappedPort(6379)}"
         sink = RedisSink(uri)
         sink.open(object : OpenContext {})
     }
 
-    @AfterEach
-    fun tearDown() {
+    afterTest {
         sink.close()
     }
 
-    private fun noOpContext() = object : org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction.Context {
+    fun noOpContext() = object : org.apache.flink.streaming.api.functions.sink.legacy.SinkFunction.Context {
         override fun currentProcessingTime() = 0L
         override fun currentWatermark() = 0L
         override fun timestamp() = null
     }
 
-    @Test
-    fun `writes team stats as hash to Redis`() {
+    test("writes team stats as hash to Redis") {
         val stats = TeamStats(
             teamName = "Flamengo",
             matchesPlayed = 38,
@@ -59,17 +49,16 @@ class RedisSinkIT {
         val uri = "redis://${redis.host}:${redis.getMappedPort(6379)}"
         RedisClient.create(uri).connect().use { conn ->
             val hash = conn.sync().hgetall("team_stats:flamengo")
-            assertEquals("38", hash["matchesPlayed"])
-            assertEquals("20", hash["wins"])
-            assertEquals("10", hash["draws"])
-            assertEquals("8", hash["losses"])
-            assertEquals("65", hash["goalsFor"])
-            assertEquals("40", hash["goalsAgainst"])
+            hash["matchesPlayed"] shouldBe "38"
+            hash["wins"] shouldBe "20"
+            hash["draws"] shouldBe "10"
+            hash["losses"] shouldBe "8"
+            hash["goalsFor"] shouldBe "65"
+            hash["goalsAgainst"] shouldBe "40"
         }
     }
 
-    @Test
-    fun `replaces spaces with underscores in key`() {
+    test("replaces spaces with underscores in key") {
         val stats = TeamStats(
             teamName = "Atletico Mineiro",
             matchesPlayed = 1, wins = 1, draws = 0, losses = 0,
@@ -80,7 +69,7 @@ class RedisSinkIT {
         val uri = "redis://${redis.host}:${redis.getMappedPort(6379)}"
         RedisClient.create(uri).connect().use { conn ->
             val hash = conn.sync().hgetall("team_stats:atletico_mineiro")
-            assertEquals("1", hash["matchesPlayed"])
+            hash["matchesPlayed"] shouldBe "1"
         }
     }
-}
+})

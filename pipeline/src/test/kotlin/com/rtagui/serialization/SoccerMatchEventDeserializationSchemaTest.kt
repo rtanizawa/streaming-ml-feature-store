@@ -1,17 +1,17 @@
 package com.rtagui.serialization
 
 import com.rtagui.producer.SoccerMatchEvent
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.shouldBe
 import org.apache.flink.util.Collector
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
-class SoccerMatchEventDeserializationSchemaTest {
+class SoccerMatchEventDeserializationSchemaTest : FunSpec({
 
-    private val schema = SoccerMatchEventDeserializationSchema()
+    val schema = SoccerMatchEventDeserializationSchema()
 
-    private fun deserialize(json: String): List<SoccerMatchEvent> {
+    fun deserialize(json: String): List<SoccerMatchEvent> {
         val output = mutableListOf<SoccerMatchEvent>()
         val record = ConsumerRecord<ByteArray, ByteArray>("bra-serie-a-matches", 0, 0L, null, json.toByteArray())
         schema.deserialize(record, object : Collector<SoccerMatchEvent> {
@@ -21,8 +21,7 @@ class SoccerMatchEventDeserializationSchemaTest {
         return output
     }
 
-    @Test
-    fun `valid JSON deserializes to correct SoccerMatchEvent`() {
+    test("valid JSON deserializes to correct SoccerMatchEvent") {
         val json = """
             {
               "eventId": "abc123",
@@ -40,25 +39,21 @@ class SoccerMatchEventDeserializationSchemaTest {
         """.trimIndent()
 
         val events = deserialize(json)
-        assertEquals(1, events.size)
+        events.size shouldBe 1
         val event = events.first()
-        assertEquals("abc123", event.eventId)
-        assertEquals("Flamengo", event.homeTeam)
-        assertEquals("Santos", event.awayTeam)
-        assertEquals(3, event.homeGoals)
-        assertEquals(1, event.awayGoals)
-        assertEquals("H", event.result)
+        event.eventId shouldBe "abc123"
+        event.homeTeam shouldBe "Flamengo"
+        event.awayTeam shouldBe "Santos"
+        event.homeGoals shouldBe 3
+        event.awayGoals shouldBe 1
+        event.result shouldBe "H"
     }
 
-    @Test
-    fun `malformed JSON produces no output without throwing`() {
-        val events = deserialize("{not valid json}")
-        assertTrue(events.isEmpty())
+    test("malformed JSON produces no output without throwing") {
+        deserialize("{not valid json}").shouldBeEmpty()
     }
 
-    @Test
-    fun `empty bytes produce no output without throwing`() {
-        val events = deserialize("")
-        assertTrue(events.isEmpty())
+    test("empty bytes produce no output without throwing") {
+        deserialize("").shouldBeEmpty()
     }
-}
+})

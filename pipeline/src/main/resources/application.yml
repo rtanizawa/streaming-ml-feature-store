@@ -1,0 +1,5 @@
+kafka:
+  bootstrapServers: "localhost:9092"
+
+redis:
+  uri: "redis://localhost:6379"
