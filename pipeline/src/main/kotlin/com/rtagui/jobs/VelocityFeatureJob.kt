@@ -10,6 +10,8 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy
 import org.apache.flink.connector.kafka.source.KafkaSource
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
+import org.apache.kafka.clients.consumer.OffsetResetStrategy
+import java.time.Duration
 
 class VelocityFeatureJob(
     private val bootstrapServers: String = "localhost:9092",
@@ -18,12 +20,13 @@ class VelocityFeatureJob(
 
     fun run() {
         val env = StreamExecutionEnvironment.getExecutionEnvironment()
+        env.enableCheckpointing(Duration.ofSeconds(10).toMillis())
 
         val source = KafkaSource.builder<SoccerMatchEvent>()
             .setBootstrapServers(bootstrapServers)
             .setTopics("bra-serie-a-matches")
             .setGroupId("flink-team-stats-consumer")
-            .setStartingOffsets(OffsetsInitializer.earliest())
+            .setStartingOffsets(OffsetsInitializer.committedOffsets(OffsetResetStrategy.EARLIEST))
             .setDeserializer(SoccerMatchEventDeserializationSchema())
             .build()
 

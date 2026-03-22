@@ -5,7 +5,7 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(25)
+    jvmToolchain(21)
 }
 
 group = "com.rtagui"
@@ -81,4 +81,30 @@ tasks.register<JavaExec>("runProducer") {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.rtagui.producer.BraSerieAProducerKt")
     args = listOf("${rootProject.projectDir}/../notebooks/bra_serie_a/BRA.csv")
+}
+
+tasks.register("deployFlink") {
+    dependsOn("shadowJar")
+    group = "application"
+    description = "Upload and run the shadow JAR on the local Flink cluster"
+    doLast {
+        val flinkUrl = "http://localhost:8081"
+        val jar = tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar").get().archiveFile.get().asFile
+
+        // Upload JAR
+        val uploadOutput = providers.exec {
+            commandLine("curl", "-sf", "-X", "POST", "-F", "jarfile=@${jar.absolutePath}", "$flinkUrl/jars/upload")
+        }.standardOutput.asText.get()
+
+        val jarId = groovy.json.JsonSlurper().parseText(uploadOutput)
+            .let { (it as Map<*, *>)["filename"] as String }
+            .substringAfterLast("/")
+
+        // Run JAR
+        providers.exec {
+            commandLine("curl", "-sf", "-X", "POST", "$flinkUrl/jars/$jarId/run")
+        }.standardOutput.asText.get().also { println("Flink response: $it") }
+
+        println("Job submitted successfully. Check $flinkUrl for status.")
+    }
 }

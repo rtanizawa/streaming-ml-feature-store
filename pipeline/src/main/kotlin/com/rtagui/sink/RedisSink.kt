@@ -37,7 +37,7 @@ class RedisSink(private val redisUri: String = "redis://localhost:6379") : RichS
     }
 
     override fun close() {
-        connection.close()
-        client.shutdown()
+        if (::connection.isInitialized) connection.close()
+        if (::client.isInitialized) client.shutdown()
     }
 }

@@ -15,14 +15,15 @@ class SoccerMatchEventDeserializationSchema : KafkaRecordDeserializationSchema<S
         private val log = LoggerFactory.getLogger(SoccerMatchEventDeserializationSchema::class.java)
     }
 
-    @delegate:Transient
-    private val objectMapper: ObjectMapper by lazy {
-        ObjectMapper().registerModule(KotlinModule.Builder().build())
-    }
+    @Transient
+    private var objectMapper: ObjectMapper? = null
+
+    private fun mapper(): ObjectMapper =
+        objectMapper ?: ObjectMapper().registerModule(KotlinModule.Builder().build()).also { objectMapper = it }
 
     override fun deserialize(record: ConsumerRecord<ByteArray, ByteArray>, out: Collector<SoccerMatchEvent>) {
         try {
-            val event = objectMapper.readValue(record.value(), SoccerMatchEvent::class.java)
+            val event = mapper().readValue(record.value(), SoccerMatchEvent::class.java)
             out.collect(event)
         } catch (e: Exception) {
             log.warn("Failed to deserialize message at offset ${record.offset()}: ${e.message}")
