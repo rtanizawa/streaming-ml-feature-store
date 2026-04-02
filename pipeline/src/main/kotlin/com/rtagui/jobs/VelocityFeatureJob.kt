@@ -3,7 +3,7 @@ package com.rtagui.jobs
 import com.rtagui.model.TeamMatchRecord
 import com.rtagui.producer.SoccerMatchEvent
 import com.rtagui.serialization.SoccerMatchEventDeserializationSchema
-import com.rtagui.sink.RedisSink
+import com.rtagui.sink.FeastHttpPushSink
 import com.rtagui.transforms.MatchToTeamRecordFlatMap
 import com.rtagui.transforms.TeamStatsFunction
 import org.apache.flink.api.common.eventtime.WatermarkStrategy
@@ -15,7 +15,7 @@ import java.time.Duration
 
 class VelocityFeatureJob(
     private val bootstrapServers: String = "localhost:9092",
-    private val redisUri: String = "redis://localhost:6379",
+    private val feastUrl: String = "http://localhost:6566",
 ) {
 
     fun run() {
@@ -34,7 +34,7 @@ class VelocityFeatureJob(
             .flatMap(MatchToTeamRecordFlatMap())
             .keyBy(TeamMatchRecord::teamName)
             .process(TeamStatsFunction())
-            .addSink(RedisSink(redisUri))
+            .sinkTo(FeastHttpPushSink(feastUrl))
 
         env.execute("TeamStatsConsumerJob")
     }

@@ -47,10 +47,27 @@ dependencies {
 
     // Flink
     implementation("org.apache.flink:flink-streaming-java:$flinkVersion")
+    implementation("org.apache.flink:flink-connector-base:$flinkVersion")
     implementation("org.apache.flink:flink-connector-kafka:4.0.1-2.0")
 
-    // Redis
-    implementation("io.lettuce:lettuce-core:6.3.2.RELEASE")
+    // Parquet / Avro (Feast offline store)
+    implementation("org.apache.parquet:parquet-avro:1.14.4")
+    implementation("org.apache.avro:avro:1.12.0")
+    // parquet-avro hard-codes a call to hadoop Configuration; include with minimal transitive surface
+    implementation("org.apache.hadoop:hadoop-common:3.3.6") {
+        exclude(group = "com.sun.jersey")
+        exclude(group = "org.mortbay.jetty")
+        exclude(group = "javax.servlet")
+        exclude(group = "io.netty")
+        exclude(group = "org.apache.zookeeper")
+        exclude(group = "org.apache.curator")
+        exclude(group = "com.google.protobuf")
+        exclude(group = "org.slf4j", module = "slf4j-reload4j")
+        exclude(group = "log4j")
+        exclude(group = "org.apache.kerby")
+        exclude(group = "org.apache.hadoop", module = "hadoop-auth")
+    }
+
 
     // CSV parsing
     implementation("org.apache.commons:commons-csv:1.10.0")
@@ -67,6 +84,7 @@ dependencies {
     testImplementation("io.kotest:kotest-assertions-core:5.9.1")
     testImplementation("org.apache.flink:flink-test-utils:$flinkVersion")
     testImplementation("org.testcontainers:testcontainers:1.19.8")
+    testImplementation("com.github.tomakehurst:wiremock-standalone:3.0.1")
 }
 
 application {
@@ -81,6 +99,35 @@ tasks.register<JavaExec>("runProducer") {
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.rtagui.producer.BraSerieAProducerKt")
     args = listOf("${rootProject.projectDir}/../notebooks/bra_serie_a/BRA.csv")
+}
+
+tasks.register("deployBatchJob") {
+    dependsOn("shadowJar")
+    group = "application"
+    description = "Upload and run the TeamStatsBatchJob on the local Flink cluster"
+    doLast {
+        val flinkUrl = "http://localhost:8081"
+        val jar = tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar").get().archiveFile.get().asFile
+
+        val uploadOutput = providers.exec {
+            commandLine("curl", "-sf", "-X", "POST", "-F", "jarfile=@${jar.absolutePath}", "$flinkUrl/jars/upload")
+        }.standardOutput.asText.get()
+
+        val jarId = groovy.json.JsonSlurper().parseText(uploadOutput)
+            .let { (it as Map<*, *>)["filename"] as String }
+            .substringAfterLast("/")
+
+        providers.exec {
+            commandLine(
+                "curl", "-sf", "-X", "POST",
+                "-H", "Content-Type: application/json",
+                "-d", """{"entryClass": "com.rtagui.jobs.TeamStatsBatchJobKt"}""",
+                "$flinkUrl/jars/$jarId/run",
+            )
+        }.standardOutput.asText.get().also { println("Flink response: $it") }
+
+        println("Batch job submitted. Check $flinkUrl for status.")
+    }
 }
 
 tasks.register("deployFlink") {

@@ -8,7 +8,7 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class AppConfig(
     val kafka: KafkaConfig = KafkaConfig(),
-    val redis: RedisConfig = RedisConfig(),
+    val feast: FeastConfig = FeastConfig(),
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -17,8 +17,9 @@ data class KafkaConfig(
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-data class RedisConfig(
-    val uri: String = "redis://localhost:6379"
+data class FeastConfig(
+    val pushUrl: String = "http://localhost:6566",
+    val offlineStorePath: String = "/data/offline_store/team_stats",
 )
 
 object AppConfigLoader {

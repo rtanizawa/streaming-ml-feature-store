@@ -8,4 +8,5 @@ data class TeamStats(
     val losses: Int,
     val goalsFor: Int,
     val goalsAgainst: Int,
+    val eventTimestamp: Long = 0L,
 )

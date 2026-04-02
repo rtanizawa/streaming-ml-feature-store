@@ -1,5 +1,6 @@
 kafka:
   bootstrapServers: "kafka:9092"
 
-redis:
-  uri: "redis://redis:6379"
+feast:
+  pushUrl: "http://feast-feature-server:6566"
+  offlineStorePath: "/data/offline_store/team_stats"

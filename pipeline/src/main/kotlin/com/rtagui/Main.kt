@@ -7,6 +7,6 @@ fun main() {
     val config = AppConfigLoader.load()
     VelocityFeatureJob(
         bootstrapServers = config.kafka.bootstrapServers,
-        redisUri = config.redis.uri,
+        feastUrl = config.feast.pushUrl,
     ).run()
 }

@@ -36,6 +36,7 @@ class TeamStatsFunction : KeyedProcessFunction<String, TeamMatchRecord, TeamStat
             losses = current.losses + if (record.result == "L") 1 else 0,
             goalsFor = current.goalsFor + (record.goalsFor ?: 0),
             goalsAgainst = current.goalsAgainst + (record.goalsAgainst ?: 0),
+            eventTimestamp = record.matchTimestamp,
         )
 
         statsState.update(updated)
