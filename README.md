@@ -1,4 +1,4 @@
-# Decision Tree PoC
+# Streaming ML Feature Store
 
 Learning project exploring feature engineering and ML model prediction using XGBoost,
 with a real-time streaming pipeline built on Kafka and Flink.
@@ -142,6 +142,20 @@ Captures actual match outcomes versus model predictions to:
 - Docker + Docker Compose
 - JDK 21+
 - Gradle
+- Python 3.9+ (serving layer only)
+
+### Configure environment
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REDIS_HOST` | `localhost` | Redis host for the serving layer |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_MAX_CONNECTIONS` | `20` | Redis connection pool size |
+| `MODEL_PATH` | `models/model.ubj` | Path to the trained XGBoost model artifact |
 
 ### Start infrastructure
 
@@ -150,7 +164,8 @@ docker compose up -d
 ```
 
 Starts: Kafka (`localhost:29092`), Flink (`localhost:8081`), Redis (`localhost:6379`),
-RedisInsight (`localhost:5540`), Kafka UI (`localhost:8082`).
+RedisInsight (`localhost:5540`), Kafka UI (`localhost:8082`), Feast feature server
+(`localhost:6566`), Feast UI (`localhost:8888`).
 
 ### Deploy the Flink job
 
@@ -166,10 +181,20 @@ cd pipeline
 ```
 
 Reads `notebooks/bra_serie_a/BRA.csv` and publishes match events to Kafka.
-Flink processes them and writes team stats to Redis.
+Flink processes them and pushes team stats to the Feast feature server.
+
+### Run the serving layer
+
+```bash
+cd serving
+pip install -r requirements.txt
+source .env  # or export variables manually
+uvicorn app.main:app --reload
+```
 
 ### Verify
 
 ```bash
+# Check features were written to Redis via Feast
 docker exec redis redis-cli hgetall team_stats:palmeiras
 ```
