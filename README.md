@@ -142,7 +142,7 @@ Captures actual match outcomes versus model predictions to:
 - Docker + Docker Compose
 - JDK 21+
 - Gradle
-- Python 3.9+ (serving layer only)
+- Python 3.12+ (serving layer only)
 
 ### Configure environment
 
