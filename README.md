@@ -8,14 +8,34 @@ with a real-time streaming pipeline built on Kafka and Flink.
 ## Current State
 
 ```
-BRA.csv ──► Producer ──► Kafka ──► Flink (Kotlin) ──► Redis
-                                                          │
-                                              XGBoost ◄──┘
-                                            (notebook)
+                      OFFLINE PIPELINE (one-time backfill)
+                      ─────────────────────────────────────────────────
+BRA.csv ──► Producer ──► Kafka ──► Flink Batch ──► Parquet
+                                   (TeamStatsBatchJob)   (offline store)
+
+
+                      ONLINE PIPELINE (continuous)
+                      ─────────────────────────────────────────────────
+BRA.csv ──► Producer ──► Kafka ──► Flink Stream ──► Feast feature server
+                                   (VelocityFeatureJob)        │
+                                                               ▼
+                                                       Redis (online store)
+
+
+                      TRAINING (manual)
+                      ─────────────────────────────────────────────────
+Parquet (offline store) ──► XGBoost training ──► model.ubj
+
+
+                      SERVING
+                      ─────────────────────────────────────────────────
+HTTP request ──► FastAPI ──► Feast feature server ──► Redis ──► XGBoost ──► Prediction
 ```
 
-A streaming pipeline that ingests Brazilian Série A match events, computes cumulative
-team statistics, and stores them in Redis as a feature store.
+Brazilian Série A match events flow through two parallel Flink jobs: a one-shot batch
+job that backfills the Parquet offline store, and a streaming job that pushes features
+to the Feast feature server, which writes to Redis. Training reads from Parquet;
+serving reads from Redis through Feast.
 
 ### Components
 
@@ -23,115 +43,50 @@ team statistics, and stores them in Redis as a feature store.
 |-------|------------|----------|
 | Event streaming | Kafka | - |
 | Stream processing | Flink 2.2 | Kotlin |
-| Feature store | Redis | - |
-| ML model | XGBoost | Python |
+| Feature store | Feast | Python |
+| Online store | Redis | - |
+| Offline store | Parquet (local file) | - |
+| Model training | XGBoost | Python |
+| Model serving | FastAPI + XGBoost | Python |
 
 ### Feature Schema
 
-Team stats are stored as Redis Hashes keyed by team name:
+Features are managed by Feast as the `team_stats` feature view, keyed by `team_name`.
+Online reads go through the Feast feature server (`POST /get-online-features`), which
+fetches from Redis; offline reads come from Parquet under
+`data/offline_store/team_stats/`.
 
-```
-team_stats:{team_name}
+Fields: `matches_played`, `wins`, `draws`, `losses`, `goals_for`, `goals_against`.
 
-team_stats:palmeiras  →  { matchesPlayed, wins, draws, losses, goalsFor, goalsAgainst }
-```
+The streaming job pushes features through Feast's HTTP push API rather than writing to
+Redis directly, so the same code path that updates the online store can also append to
+the offline store — eliminating training/serving skew.
 
 ---
 
-## Target State
+## What's Missing
 
-A full production ML lifecycle requires two distinct pipelines: **offline** for model
-training and **online** for real-time inference. Feast acts as the feature store layer,
-keeping both stores in sync through a single sink — eliminating training/serving skew.
-
-```
-                        OFFLINE PIPELINE (one-time backfill)
-                        ─────────────────────────────────────────────────
-  BRA.csv ──► Flink Batch ──► pre-computed features (Parquet)
-              (aggregations)          │
-                                      ▼
-                                feast materialize ──► Parquet/S3 (offline store)
-                                                 └──► Redis (online store)
-
-
-                        ONLINE PIPELINE (continuous)
-                        ─────────────────────────────────────────────────
-  Kafka ──► Flink Stream ──► Feast push ──► Parquet/S3 (offline store)
-            (aggregations)            └──► Redis (online store)
-
-
-                        TRAINING (scheduled or drift-triggered)
-                        ─────────────────────────────────────────────────
-  feast get_historical_features() ──► XGBoost training ──► Model Registry
-
-
-                        SERVING
-                        ─────────────────────────────────────────────────
-  Match event ──► API ──► Redis (online store) ──► XGBoost ──► Prediction
-                                                         │
-                                        Monitoring / Drift Detection
-                                                         │
-                                              Retrain Trigger
-```
-
-### Offline Pipeline
-
-Runs **once** as a **Flink Batch job** (`RuntimeExecutionMode.BATCH`) to backfill
-aggregated features from historical data (BRA.csv) into Parquet format. Feast then
-materializes these pre-computed features into both the offline (Parquet/S3) and online
-(Redis) stores via `feast materialize`.
-
-This step is only needed when:
-- Setting up the system for the first time
-- Adding a new feature that requires historical recomputation
-
-### Online Pipeline
-
-Runs **continuously** as a **Flink Streaming job** (what we have today). As new match
-events arrive via Kafka, Flink computes the same aggregations and pushes to Feast, which
-writes to **both stores simultaneously**:
-
-```kotlin
-// RedisSink replaced by a single Feast push
-store.push("match_stats_push_source", features, to = PushMode.ONLINE_AND_OFFLINE)
-```
-
-Feast's feature server (`feast serve`) exposes an HTTP endpoint that Flink calls,
-replacing the direct Redis sink. This is the only sink needed — Feast handles the rest.
-
-### Feature Store (Feast)
-
-Feast manages two backing stores:
-
-| Store | Technology | Purpose |
-|-------|------------|---------|
-| Online store | Redis | Low-latency feature serving at inference time |
-| Offline store | Parquet / S3 | Historical features for model training |
-
-Both stores are always in sync — written together on every Flink push.
-
-### Retraining
-
-Triggered on a schedule or when model drift is detected. Uses
-`feast get_historical_features()` to read point-in-time correct features from the
-offline store, guaranteeing the training dataset reflects what the model would have
-seen at prediction time (no data leakage).
+The pieces below are still aspirational — everything else in the diagram is wired up
+end to end.
 
 ### Model Registry
 
 Versioned storage for trained model artifacts (e.g. MLflow, SageMaker Model Registry).
-
-- Each training run produces a versioned artifact
-- Serving layer loads the current production version at startup
-- Supports rollback and A/B testing between versions
+Today, training writes directly to `serving/models/model.ubj` and the serving layer
+loads that single file. A registry would enable rollback, A/B testing, and a clear
+"current production version" pointer.
 
 ### Feedback Loop
 
-Captures actual match outcomes versus model predictions to:
+Capture actual match outcomes alongside the predictions the model made, so we can
+measure performance over time and detect concept drift.
 
-- Measure model performance over time
-- Detect concept drift (when match dynamics change)
-- Trigger retraining when performance falls below a threshold
+### Drift Detection & Retraining Trigger
+
+Today retraining is manual (`python training/train.py`). The target is a scheduled or
+drift-triggered job that reads point-in-time correct features via
+`feast get_historical_features()`, retrains, and publishes a new model version to the
+registry.
 
 ---
 
