@@ -5,19 +5,24 @@ with a real-time streaming pipeline built on Kafka and Flink.
 
 ---
 
-## Current State
+## Overview
+
+Brazilian Série A match events flow through two parallel Flink jobs: a one-shot batch
+job that backfills the Parquet offline store, and a streaming job that pushes features
+to the Feast feature server, which writes to Redis. Training reads from Parquet;
+serving reads from Redis through Feast.
 
 ```
 OFFLINE PIPELINE (one-time backfill)
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 BRA.csv ──► Producer ──► Kafka ──► Flink Batch ──► Parquet
-                                   (TeamStatsBatchJob)   (offline store)
+                                   (BatchJob)      (offline store)
 
 
 ONLINE PIPELINE (continuous)
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 BRA.csv ──► Producer ──► Kafka ──► Flink Stream ──► Feast feature server
-                                   (VelocityFeatureJob)        │
+                                   (FeatureJob)                │
                                                                ▼
                                                        Redis (online store)
 
@@ -32,10 +37,6 @@ SERVING
 HTTP request ──► FastAPI ──► Feast feature server ──► Redis ──► XGBoost ──► Prediction
 ```
 
-Brazilian Série A match events flow through two parallel Flink jobs: a one-shot batch
-job that backfills the Parquet offline store, and a streaming job that pushes features
-to the Feast feature server, which writes to Redis. Training reads from Parquet;
-serving reads from Redis through Feast.
 
 ### Components
 
@@ -61,32 +62,6 @@ Fields: `matches_played`, `wins`, `draws`, `losses`, `goals_for`, `goals_against
 The streaming job pushes features through Feast's HTTP push API rather than writing to
 Redis directly, so the same code path that updates the online store can also append to
 the offline store — eliminating training/serving skew.
-
----
-
-## What's Missing
-
-The pieces below are still aspirational — everything else in the diagram is wired up
-end to end.
-
-### Model Registry
-
-Versioned storage for trained model artifacts (e.g. MLflow, SageMaker Model Registry).
-Today, training writes directly to `serving/models/model.ubj` and the serving layer
-loads that single file. A registry would enable rollback, A/B testing, and a clear
-"current production version" pointer.
-
-### Feedback Loop
-
-Capture actual match outcomes alongside the predictions the model made, so we can
-measure performance over time and detect concept drift.
-
-### Drift Detection & Retraining Trigger
-
-Today retraining is manual (`python training/train.py`). The target is a scheduled or
-drift-triggered job that reads point-in-time correct features via
-`feast get_historical_features()`, retrains, and publishes a new model version to the
-registry.
 
 ---
 
@@ -122,7 +97,7 @@ Starts: Kafka (`localhost:29092`), Flink (`localhost:8081`), Redis (`localhost:6
 RedisInsight (`localhost:5540`), Kafka UI (`localhost:8082`), Feast feature server
 (`localhost:6566`), Feast UI (`localhost:8888`).
 
-### Replicating the four flows
+### Executing each flow
 
 The four flows in the diagram are wired up but each requires a separate command,
 and they must run in this order. The Kafka topic `bra-serie-a-matches` is
@@ -132,7 +107,7 @@ auto-created on first produce.
 
 ```bash
 cd pipeline
-./gradlew deployFlink
+    ./gradlew deployFlink
 ```
 
 Uploads the shadow JAR and runs `VelocityFeatureJob`. It consumes from Kafka and
@@ -180,10 +155,10 @@ uvicorn main:app --reload
 
 ```bash
 # Check features were written to Redis via Feast
-docker exec redis redis-cli hgetall team_stats:palmeiras
+docker exec redis redis-cli hgetall team_stats:sao_paulo
 
 # Hit the prediction endpoint
-curl http://localhost:8000/predict/palmeiras
+curl http://localhost:8000/predict/sao_paulo
 ```
 
 ---
@@ -199,3 +174,30 @@ inspecting and debugging the pipeline:
 | Flink UI | <http://localhost:8081> | Monitor jobs, task managers, and checkpoints |
 | Feast UI | <http://localhost:8888> | Explore feature views, entities, and registry |
 | RedisInsight | <http://localhost:5540> | Inspect keys and values in the online store |
+
+
+---
+
+## What's Missing
+
+The pieces below are still aspirational — everything else in the diagram is wired up
+end to end.
+
+### Model Registry
+
+Versioned storage for trained model artifacts (e.g. MLflow, SageMaker Model Registry).
+Today, training writes directly to `serving/models/model.ubj` and the serving layer
+loads that single file. A registry would enable rollback, A/B testing, and a clear
+"current production version" pointer.
+
+### Feedback Loop
+
+Capture actual match outcomes alongside the predictions the model made, so we can
+measure performance over time and detect concept drift.
+
+### Drift Detection & Retraining Trigger
+
+Today retraining is manual (`python training/train.py`). The target is a scheduled or
+drift-triggered job that reads point-in-time correct features via
+`feast get_historical_features()`, retrains, and publishes a new model version to the
+registry.

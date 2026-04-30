@@ -6,7 +6,7 @@ set -euo pipefail
 TOPIC="${1:?Usage: $0 <topic-name> [partitions] [replication-factor]}"
 PARTITIONS="${2:-1}"
 REPLICATION_FACTOR="${3:-1}"
-CONTAINER="decision-tree-kafka"
+CONTAINER="streaming-ml-feature-store"
 
 echo "Creating topic '${TOPIC}' (partitions=${PARTITIONS}, replication-factor=${REPLICATION_FACTOR})..."
 

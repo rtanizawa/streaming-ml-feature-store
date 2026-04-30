@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-CONTAINER="decision-tree-kafka"
+CONTAINER="streaming-ml-feature-store"
 
 declare -A TOPICS
 # TOPICS["topic-name"]="partitions:replication-factor"
