@@ -1,6 +1,8 @@
 import numpy as np
 import xgboost as xgb
 
+FEATURES = ["matches_played", "wins", "draws", "losses", "goals_for", "goals_against"]
+
 
 class Scorer:
     def __init__(self, model_path: str):
@@ -8,12 +10,6 @@ class Scorer:
         self.model.load_model(model_path)
 
     def predict(self, features: dict) -> float:
-        # TODO: align feature order with training
-        values = np.array([[
-            features.get("txn_count_1h", 0.0),
-            features.get("txn_sum_1h", 0.0),
-            features.get("txn_count_24h", 0.0),
-            features.get("txn_sum_24h", 0.0),
-        ]])
-        dmatrix = xgb.DMatrix(values)
+        values = np.array([[features.get(f, 0.0) for f in FEATURES]], dtype=np.float32)
+        dmatrix = xgb.DMatrix(values, feature_names=FEATURES)
         return float(self.model.predict(dmatrix)[0])
