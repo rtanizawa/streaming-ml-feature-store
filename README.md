@@ -175,6 +175,9 @@ inspecting and debugging the pipeline:
 | Feast UI | <http://localhost:8888> | Explore feature views, entities, and registry |
 | RedisInsight | <http://localhost:5540> | Inspect keys and values in the online store |
 
+Feast stores data in Redis using binary serialization (usually Protobuf), making the keys and values unreadable in a 
+standard Redis GUI (like RedisInsight) which expects text. The data is valid, but encoded. To verify data, use 
+redis-cli with --raw to view raw bytes, or write a small Python script using feast.online_read
 
 ---
 
