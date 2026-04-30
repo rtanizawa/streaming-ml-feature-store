@@ -122,28 +122,57 @@ Starts: Kafka (`localhost:29092`), Flink (`localhost:8081`), Redis (`localhost:6
 RedisInsight (`localhost:5540`), Kafka UI (`localhost:8082`), Feast feature server
 (`localhost:6566`), Feast UI (`localhost:8888`).
 
-### Deploy the Flink job
+### Replicating the four flows
+
+The four flows in the diagram are wired up but each requires a separate command,
+and they must run in this order. The Kafka topic `bra-serie-a-matches` is
+auto-created on first produce.
+
+#### 1. Online pipeline — deploy the streaming job
 
 ```bash
 cd pipeline
 ./gradlew deployFlink
 ```
 
-### Run the producer
+Uploads the shadow JAR and runs `VelocityFeatureJob`. It consumes from Kafka and
+pushes features to the Feast feature server (which writes to Redis).
+
+#### 2. Run the producer
 
 ```bash
 ./gradlew runProducer
 ```
 
-Reads `notebooks/bra_serie_a/BRA.csv` and publishes match events to Kafka.
-Flink processes them and pushes team stats to the Feast feature server.
+Reads `notebooks/bra_serie_a/BRA.csv` and publishes match events to Kafka. The
+streaming job picks them up live.
 
-### Run the serving layer
+#### 3. Offline pipeline — backfill the Parquet store
 
 ```bash
-cd serving
+./gradlew deployBatchJob
+```
+
+Runs `TeamStatsBatchJob`, which reads Kafka from earliest to latest (bounded) and
+writes `data/offline_store/team_stats/*.parquet`. **Must run after the producer
+finishes** — the job stops at the latest offset at submission time.
+
+#### 4. Training — produce the model artifact
+
+```bash
+cd ../training
 pip install -r requirements.txt
-source .env  # or export variables manually
+python train.py
+```
+
+Reads the Parquet offline store and writes `serving/models/model.ubj`.
+
+#### 5. Serving — load model + features and predict
+
+```bash
+cd ../serving
+pip install -r requirements.txt
+source ../.env  # or export variables manually
 uvicorn main:app --reload
 ```
 
@@ -152,6 +181,9 @@ uvicorn main:app --reload
 ```bash
 # Check features were written to Redis via Feast
 docker exec redis redis-cli hgetall team_stats:palmeiras
+
+# Hit the prediction endpoint
+curl http://localhost:8000/predict/palmeiras
 ```
 
 ---
