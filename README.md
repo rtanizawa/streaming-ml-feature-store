@@ -189,7 +189,7 @@ Flink processes them and pushes team stats to the Feast feature server.
 cd serving
 pip install -r requirements.txt
 source .env  # or export variables manually
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
 ### Verify
