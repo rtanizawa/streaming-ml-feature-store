@@ -1,1 +1,1 @@
-rootProject.name = "decision-tree-pipeline"
+rootProject.name = "streaming-ml-feature-store"
