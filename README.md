@@ -107,7 +107,7 @@ auto-created on first produce.
 
 ```bash
 cd pipeline
-    ./gradlew deployFlink
+./gradlew deployFlink
 ```
 
 Uploads the shadow JAR and runs `VelocityFeatureJob`. It consumes from Kafka and
