@@ -204,3 +204,18 @@ Today retraining is manual (`python training/train.py`). The target is a schedul
 drift-triggered job that reads point-in-time correct features via
 `feast get_historical_features()`, retrains, and publishes a new model version to the
 registry.
+
+### Prediction Explanations (Reason Codes)
+
+Today serving returns just a score. The target is to surface *why* a prediction was
+made so downstream consumers (or auditors) can act on it. The notebook
+`notebooks/visualize_model.ipynb` already computes per-prediction SHAP values — the
+missing piece is productionizing them:
+
+- Log `(features, prediction, shap_values)` to a prediction store alongside each
+  serving response.
+- A post-serving job derives human-readable **reason code tags** from the top-K
+  SHAP contributions (e.g. `high merchant_risk_score` → `"unusual merchant"`),
+  using a versioned static mapping.
+- Consumers read tags from the prediction store rather than the hot serving path,
+  keeping latency low and decoupling explanation logic from inference.
