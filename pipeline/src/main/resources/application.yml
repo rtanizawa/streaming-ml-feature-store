@@ -4,3 +4,4 @@ kafka:
 feast:
   pushUrl: "http://feast-feature-server:6566"
   offlineStorePath: "/data/offline_store/team_stats"
+  matchesOfflinePath: "/data/offline_store/matches"

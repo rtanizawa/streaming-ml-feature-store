@@ -20,6 +20,7 @@ data class KafkaConfig(
 data class FeastConfig(
     val pushUrl: String = "http://localhost:6566",
     val offlineStorePath: String = "/data/offline_store/team_stats",
+    val matchesOfflinePath: String = "/data/offline_store/matches",
 )
 
 object AppConfigLoader {
